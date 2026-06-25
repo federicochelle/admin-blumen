@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-forest-50: #f4f8f2;
+  --color-forest-100: #e7f0e2;
+  --color-forest-200: #cedfca;
+  --color-forest-500: #5e7f63;
+  --color-forest-700: #2d4a34;
+  --color-forest-900: #18261c;
+  --color-sand-50: #fcfaf6;
+  --color-sand-100: #f4efe7;
+  --color-sand-200: #e6ddcf;
+  --color-clay-500: #a06f48;
+  --color-clay-700: #744b2f;
+  --color-brand-turquoise: #2eb7af;
+  --color-brand-deep-purple: #5b466f;
+  --color-brand-deeper-purple: #3d2d4f;
+  --color-brand-light-lilac: #b89bd6;
+  --color-brand-lavender: #9d84be;
+  --font-sans: 'Suisse Intl', 'Avenir Next', 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  :root {
+    --brand-turquoise: var(--color-brand-turquoise);
+    --brand-deep-purple: var(--color-brand-deep-purple);
+    --brand-deeper-purple: var(--color-brand-deeper-purple);
+    --brand-light-lilac: var(--color-brand-light-lilac);
+    --brand-lavender: var(--color-brand-lavender);
+    color: var(--color-forest-900);
+    background-color: var(--color-sand-50);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    font-family: var(--font-sans);
+    background:
+      radial-gradient(circle at top left, rgba(231, 240, 226, 0.95), transparent 34%),
+      linear-gradient(180deg, #fcfaf6 0%, #f4efe7 100%);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+}
