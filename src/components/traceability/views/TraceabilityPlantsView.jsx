@@ -8,6 +8,7 @@ function TraceabilityPlantsView({
   selectedPlantId,
   onSelectPlant,
   onDataChanged,
+  onDeleted,
   viewMode = 'list',
   onNavigateList,
   onNavigateDetail,
@@ -56,6 +57,7 @@ function TraceabilityPlantsView({
           plant={selectedPlant}
           onDataChanged={onDataChanged}
           onOpenRoomDetail={onOpenRoomDetail}
+          onDeleted={onDeleted}
           onBack={handleBackToList}
         />
       ) : (

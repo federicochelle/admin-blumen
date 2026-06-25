@@ -48,6 +48,22 @@ function Rooms() {
     navigate(`/plantas?view=detail&plant=${plantId}`)
   }
 
+  async function handlePlantDeleted(deletedPlant) {
+    await loadTraceability()
+
+    if (selectedRoom?.id) {
+      navigateToDetail(selectedRoom.id)
+      return
+    }
+
+    if (deletedPlant?.roomId) {
+      navigateToDetail(deletedPlant.roomId)
+      return
+    }
+
+    navigateToList()
+  }
+
   let breadcrumbItems = [{ label: 'Salas' }]
 
   if (viewMode === 'detail' && selectedRoom) {
@@ -87,6 +103,7 @@ function Rooms() {
           plant={selectedPlant}
           onDataChanged={loadTraceability}
           onOpenRoomDetail={navigateToDetail}
+          onDeleted={handlePlantDeleted}
         />
       ) : (
         <TraceabilityRoomsView

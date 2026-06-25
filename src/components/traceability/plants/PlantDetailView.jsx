@@ -6,6 +6,7 @@ import PlantEventDetailModal from './PlantEventDetailModal'
 import PlantEventsHistory from './PlantEventsHistory'
 import PlantRecordModals from './PlantRecordModals'
 import PlantVisualTimeline from './PlantVisualTimeline'
+import { deletePlant } from '../../../services/traceability.service'
 
 function ActionButton({
   label,
@@ -22,6 +23,8 @@ function ActionButton({
       'border-brand-turquoise bg-brand-turquoise text-white hover:border-brand-deep-purple hover:bg-brand-deep-purple',
     secondary:
       'border-brand-lavender bg-brand-light-lilac text-brand-deep-purple hover:border-brand-deep-purple hover:bg-brand-lavender/30',
+    destructive:
+      'border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100',
   }
 
   return (
@@ -57,17 +60,45 @@ function SurfaceCard({ title, subtitle = null, children }) {
   )
 }
 
-function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail }) {
+function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail, onDeleted }) {
   const [showEventForm, setShowEventForm] = useState(false)
   const [showIrrigationForm, setShowIrrigationForm] = useState(false)
   const [showObservationForm, setShowObservationForm] = useState(false)
   const [showMovePlantModal, setShowMovePlantModal] = useState(false)
   const [showEditPlantModal, setShowEditPlantModal] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState(null)
+  const [deletingPlant, setDeletingPlant] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   async function handleEventDeleted() {
     setSelectedEvent(null)
     await onDataChanged?.()
+  }
+
+  async function handleDeletePlant() {
+    if (!plant?.id || deletingPlant) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      '¿Eliminar esta planta? Esta acción borrará también sus eventos y no se puede deshacer.',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setDeleteError('')
+    setDeletingPlant(true)
+
+    try {
+      await deletePlant(plant.id)
+      await onDeleted?.(plant)
+    } catch (error) {
+      setDeleteError(error.message ?? 'No se pudo eliminar la planta.')
+    } finally {
+      setDeletingPlant(false)
+    }
   }
 
   return (
@@ -87,9 +118,15 @@ function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail }) {
           </div>
 
           <div className="space-y-4 lg:min-w-[340px]">
+            {deleteError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {deleteError}
+              </div>
+            ) : null}
+
             <div className="flex flex-row flex-wrap gap-3 lg:justify-end">
               <ActionButton
-                label="Registrar evento"
+                label="Evento"
                 tone="primary"
                 onClick={() => setShowEventForm(true)}
                 icon={
@@ -100,7 +137,7 @@ function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail }) {
                 }
               />
               <ActionButton
-                label="Mover planta"
+                label="Mover"
                 tone="secondary"
                 onClick={() => setShowMovePlantModal(true)}
                 icon={
@@ -113,13 +150,28 @@ function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail }) {
                 }
               />
               <ActionButton
-                label="Editar planta"
+                label="Editar"
                 tone="default"
                 onClick={() => setShowEditPlantModal(true)}
                 icon={
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="m4 20 4.5-1 9-9a2.1 2.1 0 0 0-3-3l-9 9L4 20Z" />
                     <path d="M13.5 6.5l4 4" />
+                  </svg>
+                }
+              />
+              <ActionButton
+                label={deletingPlant ? 'Eliminando...' : 'Eliminar'}
+                tone="destructive"
+                onClick={handleDeletePlant}
+                disabled={deletingPlant}
+                icon={
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M4 7h16" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+                    <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                   </svg>
                 }
               />

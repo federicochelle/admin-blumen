@@ -985,6 +985,125 @@ export async function deletePlantEvent(eventId) {
   }
 }
 
+export async function deletePlant(plantId) {
+  ensureSupabaseEnv()
+
+  if (!plantId) {
+    throw new Error('No se encontro la planta a eliminar.')
+  }
+
+  const { data: plant, error: plantLookupError } = await supabase
+    .from('plants')
+    .select('id, bed_id')
+    .eq('id', plantId)
+    .maybeSingle()
+
+  if (plantLookupError) {
+    throw new Error(`No se pudo validar la planta antes de eliminarla: ${plantLookupError.message}`)
+  }
+
+  if (!plant) {
+    throw new Error('No se encontro la planta a eliminar.')
+  }
+
+  const { data: plantEvents, error: plantEventsLookupError } = await supabase
+    .from('plant_events')
+    .select('*')
+    .eq('plant_id', plantId)
+
+  if (plantEventsLookupError) {
+    throw new Error(`No se pudieron validar los eventos de la planta: ${plantEventsLookupError.message}`)
+  }
+
+  let irrigationsToRestore = []
+
+  if (plant.bed_id) {
+    const { data: siblingPlants, error: siblingPlantsError } = await supabase
+      .from('plants')
+      .select('id')
+      .eq('bed_id', plant.bed_id)
+      .neq('id', plantId)
+      .limit(1)
+
+    if (siblingPlantsError) {
+      throw new Error(`No se pudo validar la zona de la planta: ${siblingPlantsError.message}`)
+    }
+
+    if ((siblingPlants ?? []).length === 0) {
+      const { data: irrigations, error: irrigationsLookupError } = await supabase
+        .from('irrigations')
+        .select('*')
+        .eq('bed_id', plant.bed_id)
+
+      if (irrigationsLookupError) {
+        throw new Error(`No se pudieron validar los riegos de la planta: ${irrigationsLookupError.message}`)
+      }
+
+      irrigationsToRestore = irrigations ?? []
+    }
+  }
+
+  if ((plantEvents ?? []).length > 0) {
+    const { error: deletePlantEventsError } = await supabase
+      .from('plant_events')
+      .delete()
+      .eq('plant_id', plantId)
+
+    if (deletePlantEventsError) {
+      throw new Error(`No se pudieron eliminar los eventos de la planta: ${deletePlantEventsError.message}`)
+    }
+  }
+
+  if (irrigationsToRestore.length > 0) {
+    const { error: deleteIrrigationsError } = await supabase
+      .from('irrigations')
+      .delete()
+      .eq('bed_id', plant.bed_id)
+
+    if (deleteIrrigationsError) {
+      if ((plantEvents ?? []).length > 0) {
+        await supabase.from('plant_events').insert(plantEvents)
+      }
+
+      throw new Error(`No se pudieron eliminar los riegos de la planta: ${deleteIrrigationsError.message}`)
+    }
+  }
+
+  const { error: deletePlantError } = await supabase.from('plants').delete().eq('id', plantId)
+
+  if (deletePlantError) {
+    let rollbackIssues = []
+
+    if (irrigationsToRestore.length > 0) {
+      const { error: restoreIrrigationsError } = await supabase
+        .from('irrigations')
+        .insert(irrigationsToRestore)
+
+      if (restoreIrrigationsError) {
+        rollbackIssues.push('riegos')
+      }
+    }
+
+    if ((plantEvents ?? []).length > 0) {
+      const { error: restorePlantEventsError } = await supabase
+        .from('plant_events')
+        .insert(plantEvents)
+
+      if (restorePlantEventsError) {
+        rollbackIssues.push('eventos')
+      }
+    }
+
+    if (rollbackIssues.length > 0) {
+      throw new Error(
+        `No se pudo eliminar la planta y tampoco restaurar ${rollbackIssues.join(' y ')} asociados: ${deletePlantError.message}`,
+      )
+    }
+
+    throw new Error(`No se pudo eliminar la planta: ${deletePlantError.message}`)
+  }
+}
+
 export async function createPlantEventsBatch(payloads) {
   ensureSupabaseEnv()
 

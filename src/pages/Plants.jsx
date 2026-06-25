@@ -32,6 +32,22 @@ function Plants() {
     navigate(`/salas?view=detail&room=${roomId}`)
   }
 
+  async function handlePlantDeleted(deletedPlant) {
+    await loadTraceability()
+
+    if (sourceRoom?.id) {
+      navigate(`/salas?view=detail&room=${sourceRoom.id}`)
+      return
+    }
+
+    if (deletedPlant?.roomId) {
+      navigate(`/salas?view=detail&room=${deletedPlant.roomId}`)
+      return
+    }
+
+    navigateToList()
+  }
+
   const breadcrumbItems =
     viewMode === 'detail' && selectedPlant && sourceRoom
       ? [
@@ -60,6 +76,7 @@ function Plants() {
           selectedPlantId={selectedPlantId}
           onSelectPlant={() => {}}
           onDataChanged={loadTraceability}
+          onDeleted={handlePlantDeleted}
           viewMode={viewMode}
           onNavigateList={navigateToList}
           onNavigateDetail={navigateToDetail}
