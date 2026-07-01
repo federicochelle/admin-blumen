@@ -113,6 +113,9 @@ function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail, onDeleted }) 
               <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
                 {plant.code}
               </h1>
+              <p className="mt-2 text-base font-semibold text-brand-deeper-purple">
+                {plant.batchLabel ?? 'Sin lote'}
+              </p>
               <p className="mt-1 text-lg text-slate-600">{plant.strain}</p>
             </div>
           </div>

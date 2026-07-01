@@ -5,6 +5,8 @@ export const EVENT_FORM_INITIAL_VALUES = {
   event_date: '',
   description: '',
   observation: '',
+  harvest_weight: '',
+  harvest_unit: 'g',
   product: '',
   dose: '',
   ph: '',
@@ -43,6 +45,10 @@ export function getEventFormKind(eventType) {
 
   if (eventType === 'DRENADO') {
     return 'drain'
+  }
+
+  if (eventType === 'COSECHA') {
+    return 'harvest'
   }
 
   return 'generic'
@@ -117,6 +123,13 @@ function buildDrainDescription(values) {
   }
 
   const base = segments.length > 0 ? `Drenado: ${segments.join(' · ')}` : 'Drenado'
+  return buildSentence(base, values.observation)
+}
+
+function buildHarvestDescription(values) {
+  const unit = values.harvest_unit?.trim() || 'g'
+  const weight = values.harvest_weight?.trim()
+  const base = weight ? `Cosecha registrada. Peso: ${weight} ${unit}` : 'Cosecha registrada'
   return buildSentence(base, values.observation)
 }
 
@@ -201,6 +214,23 @@ export function buildPlantEventPayload(eventType, values) {
         ph_out: toNullableNumber(values.ph_out),
         ec_out: toNullableNumber(values.ec_out),
       },
+    }
+  }
+
+  if (eventType === 'COSECHA') {
+    const weight = toNullableNumber(values.harvest_weight)
+    const eventData =
+      weight === null
+        ? null
+        : {
+            harvest_weight: weight,
+            unit: values.harvest_unit?.trim() || 'g',
+          }
+
+    return {
+      event_date: eventDate,
+      description: buildHarvestDescription(values),
+      event_data: eventData,
     }
   }
 

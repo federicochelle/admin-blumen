@@ -276,6 +276,14 @@ export function buildTraceabilityModel({
       rowIndex: Number.isInteger(plant.row_index) ? plant.row_index : null,
       columnIndex: Number.isInteger(plant.column_index) ? plant.column_index : null,
       strainId: plant.strainId ?? null,
+      batchId: plant.batchId ?? null,
+      batchCode: plant.batchCode ?? null,
+      batchName: plant.batchName ?? null,
+      batchLabel: plant.batchCode
+        ? plant.batchName
+          ? `${plant.batchCode} · ${plant.batchName}`
+          : plant.batchCode
+        : plant.batchName ?? 'Sin lote',
       plantedAtRaw: plant.planted_at ?? null,
       firstTransplantAt: formatDate(plant.first_transplant_at),
       plantedAt: formatDate(plant.planted_at),

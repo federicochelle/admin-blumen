@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import AppShell from '../app/AppShell'
 import { ProtectedRoute, PublicOnlyRoute } from '../auth/ProtectedRoute'
 import Audit from '../pages/Audit'
+import Batches from '../pages/Batches'
 import Login from '../pages/Login'
 import Plants from '../pages/Plants'
 import Rooms from '../pages/Rooms'
@@ -25,6 +26,10 @@ export const router = createBrowserRouter([
           {
             path: 'plantas',
             element: <Plants />,
+          },
+          {
+            path: 'lotes',
+            element: <Batches />,
           },
           {
             path: 'auditoria',

@@ -23,6 +23,8 @@ function TraceabilityPlantsView({
       plant.strain,
       plant.room,
       plant.bed,
+      plant.batchCode,
+      plant.batchName,
       plant.stage,
       plant.status,
     ]

@@ -2,6 +2,7 @@ import DrainEventForm from './DrainEventForm'
 import FertilizationEventForm from './FertilizationEventForm'
 import FloweringEventForm from './FloweringEventForm'
 import GenericEventForm from './GenericEventForm'
+import HarvestEventForm from './HarvestEventForm'
 import { getEventFormKind } from './eventFormUtils'
 
 function EventFormRenderer({ eventType, values, onChange }) {
@@ -17,6 +18,10 @@ function EventFormRenderer({ eventType, values, onChange }) {
 
   if (formKind === 'drain') {
     return <DrainEventForm values={values} onChange={onChange} />
+  }
+
+  if (formKind === 'harvest') {
+    return <HarvestEventForm values={values} onChange={onChange} />
   }
 
   return <GenericEventForm values={values} onChange={onChange} />

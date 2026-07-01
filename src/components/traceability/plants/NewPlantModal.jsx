@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PLANT_STAGES } from '../../../constants/plantStages'
-import { createPlant, getStrains } from '../../../services/traceability.service'
+import { createPlant, getPlantBatches, getStrains } from '../../../services/traceability.service'
 
 function InlineFormMessage({ message }) {
   if (!message) {
@@ -14,34 +13,18 @@ function InlineFormMessage({ message }) {
   )
 }
 
-function formatDateInput(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function toLocalNoonIso(dateValue) {
-  const parsedDate = new Date(`${dateValue}T12:00:00`)
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null
-  }
-
-  return parsedDate.toISOString()
-}
-
 function NewPlantModal({ open, slot, onClose, onCreated }) {
   const [strains, setStrains] = useState([])
+  const [batches, setBatches] = useState([])
   const [loadingStrains, setLoadingStrains] = useState(false)
-  const [strainsError, setStrainsError] = useState('')
+  const [loadingBatches, setLoadingBatches] = useState(false)
+  const [catalogError, setCatalogError] = useState('')
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [form, setForm] = useState({
     code: '',
     strain_id: '',
-    stage: PLANT_STAGES[0].value,
-    planted_at: formatDateInput(),
+    batch_id: '',
     notes: '',
   })
 
@@ -50,8 +33,7 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
     setForm({
       code: '',
       strain_id: '',
-      stage: PLANT_STAGES[0].value,
-      planted_at: formatDateInput(),
+      batch_id: '',
       notes: '',
     })
   }
@@ -68,33 +50,37 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
 
     let cancelled = false
 
-    async function loadStrains() {
+    async function loadCatalogs() {
       setLoadingStrains(true)
-      setStrainsError('')
+      setLoadingBatches(true)
+      setCatalogError('')
 
       try {
-        const data = await getStrains()
+        const [strainData, batchData] = await Promise.all([getStrains(), getPlantBatches()])
 
         if (cancelled) {
           return
         }
 
-        setStrains(data)
+        setStrains(strainData)
+        setBatches(batchData)
       } catch (error) {
         if (cancelled) {
           return
         }
 
         setStrains([])
-        setStrainsError(error.message ?? 'No se pudo cargar la lista de geneticas.')
+        setBatches([])
+        setCatalogError(error.message ?? 'No se pudieron cargar los datos del formulario.')
       } finally {
         if (!cancelled) {
           setLoadingStrains(false)
+          setLoadingBatches(false)
         }
       }
     }
 
-    loadStrains()
+    loadCatalogs()
 
     return () => {
       cancelled = true
@@ -107,7 +93,6 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
 
   const roomName = slot.room?.name ?? 'Sin sala'
   const zoneCode = slot.bed?.code ?? slot.bed?.name ?? 'Sin zona'
-  const positionLabel = `Fila ${slot.rowIndex + 1} / Columna ${slot.columnIndex + 1}`
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -123,30 +108,16 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
       return
     }
 
-    if (!form.stage) {
-      setSubmitError('La etapa es obligatoria.')
-      return
-    }
-
-    const plantedAtIso = toLocalNoonIso(form.planted_at)
-
-    if (!plantedAtIso) {
-      setSubmitError('La fecha seleccionada no es valida.')
-      return
-    }
-
     setSaving(true)
 
     try {
       await createPlant({
         code: form.code,
         strain_id: form.strain_id ? Number(form.strain_id) : null,
-        stage: form.stage,
+        batch_id: form.batch_id || null,
         bed_id: slot.bed.id,
         row_index: slot.rowIndex,
         column_index: slot.columnIndex,
-        planted_at: plantedAtIso,
-        event_date: plantedAtIso,
         notes: form.notes,
         event_description: `Se creó la planta ${form.code.trim()} en la sala ${roomName}, zona ${zoneCode}, fila ${slot.rowIndex + 1}, columna ${slot.columnIndex + 1}.`,
       })
@@ -199,36 +170,6 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Sala</span>
-                <input
-                  type="text"
-                  value={roomName}
-                  readOnly
-                  className="w-full rounded-xl border border-brand-lavender/45 bg-brand-light-lilac/18 px-3 py-2.5 text-sm text-brand-deep-purple outline-none"
-                />
-              </label>
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Zona</span>
-                <input
-                  type="text"
-                  value={zoneCode}
-                  readOnly
-                  className="w-full rounded-xl border border-brand-lavender/45 bg-brand-light-lilac/18 px-3 py-2.5 text-sm text-brand-deep-purple outline-none"
-                />
-              </label>
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Posicion</span>
-                <input
-                  type="text"
-                  value={positionLabel}
-                  readOnly
-                  className="w-full rounded-xl border border-brand-lavender/45 bg-brand-light-lilac/18 px-3 py-2.5 text-sm text-brand-deep-purple outline-none"
-                />
-              </label>
-            </div>
-
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Codigo</span>
@@ -264,33 +205,22 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Etapa</span>
+                <span className="text-sm font-medium text-slate-700">Lote</span>
                 <select
-                  value={form.stage}
-                  required
+                  value={form.batch_id}
                   onChange={(formEvent) =>
-                    setForm((current) => ({ ...current, stage: formEvent.target.value }))
+                    setForm((current) => ({ ...current, batch_id: formEvent.target.value }))
                   }
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-forest-400"
+                  disabled={loadingBatches}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-forest-400 disabled:cursor-not-allowed disabled:bg-slate-100"
                 >
-                  {PLANT_STAGES.map((stage) => (
-                    <option key={stage.value} value={stage.value}>
-                      {stage.label}
+                  <option value="">{loadingBatches ? 'Cargando lotes...' : 'Sin lote'}</option>
+                  {batches.map((batch) => (
+                    <option key={batch.id} value={batch.id}>
+                      {batch.name ? `${batch.code} · ${batch.name}` : batch.code}
                     </option>
                   ))}
                 </select>
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Fecha</span>
-                <input
-                  type="date"
-                  value={form.planted_at}
-                  onChange={(formEvent) =>
-                    setForm((current) => ({ ...current, planted_at: formEvent.target.value }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-forest-400"
-                />
               </label>
 
               <label className="space-y-2 md:col-span-2">
@@ -306,7 +236,7 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
               </label>
             </div>
 
-            <InlineFormMessage message={strainsError || submitError} />
+            <InlineFormMessage message={catalogError || submitError} />
 
             <div className="flex flex-wrap justify-end gap-2">
               <button

@@ -2,6 +2,7 @@ import { buildTraceabilityModel } from './traceability.adapters'
 import {
   getAllIrrigations,
   getAllPlantEvents,
+  getPlantBatchById,
   getBedsByRoom,
   getPlants,
   getRooms,
@@ -98,7 +99,8 @@ function getHarvestWeight(harvestEvent) {
   }
 
   const weight = eventData.harvest_weight ?? eventData.weight ?? ''
-  return weight === null || weight === undefined || weight === '' ? '' : String(weight)
+  const unit = String(eventData.unit ?? 'g').trim() || 'g'
+  return weight === null || weight === undefined || weight === '' ? '' : `${String(weight)} ${unit}`
 }
 
 function getAuditObservations(plant, events) {
@@ -129,7 +131,8 @@ function getEventDateValue(event) {
   return formatAuditDate(event?.event_date ?? event?.date ?? '')
 }
 
-function buildRowMap(plant) {
+function buildRowMap(plant, options = {}) {
+  const { observationOverride } = options
   const sortedEvents = sortEventsByDate(plant.events)
   const germinationEvent = findFirstEvent(sortedEvents, ['GERMINACION'])
   const firstTransplantEvent =
@@ -152,13 +155,16 @@ function buildRowMap(plant) {
     'Inicio de floracion': getEventDateValue(floweringEvent),
     Cosecha: getEventDateValue(harvestEvent),
     Peso: getHarvestWeight(harvestEvent),
-    Observaciones: getAuditObservations(plant, sortedEvents),
+    Observaciones:
+      observationOverride !== undefined
+        ? observationOverride ?? ''
+        : getAuditObservations(plant, sortedEvents),
   }
 }
 
-function buildSheetRows(header, plants) {
+function buildSheetRows(header, plants, options = {}) {
   return plants.map((plant) => {
-    const rowMap = buildRowMap(plant)
+    const rowMap = buildRowMap(plant, options)
     return header.map((column) => rowMap[column] ?? '')
   })
 }
@@ -183,11 +189,12 @@ async function loadTraceabilityPlants() {
   }).plantRows
 }
 
-export async function exportTraceabilityAuditWorkbook() {
-  const [{ read, utils, writeFile }, templateResponse, plants] = await Promise.all([
+async function writeAuditWorkbook(plants, fileName, options = {}) {
+  const { groupByCohort = true, observationOverride } = options
+  const [{ read, utils, writeFile }, templateResponse, exportPlants] = await Promise.all([
     import('xlsx'),
     fetch(TEMPLATE_URL),
-    loadTraceabilityPlants(),
+    Promise.resolve(plants),
   ])
 
   if (!templateResponse.ok) {
@@ -196,20 +203,22 @@ export async function exportTraceabilityAuditWorkbook() {
 
   const templateBuffer = await templateResponse.arrayBuffer()
   const workbook = read(templateBuffer, { type: 'array' })
-  const plantsByCohortKey = plants.reduce((accumulator, plant) => {
-    const key = getPlantCohortKey(plant.code)
+  const plantsByCohortKey = groupByCohort
+    ? exportPlants.reduce((accumulator, plant) => {
+        const key = getPlantCohortKey(plant.code)
 
-    if (!key) {
-      return accumulator
-    }
+        if (!key) {
+          return accumulator
+        }
 
-    if (!accumulator[key]) {
-      accumulator[key] = []
-    }
+        if (!accumulator[key]) {
+          accumulator[key] = []
+        }
 
-    accumulator[key].push(plant)
-    return accumulator
-  }, {})
+        accumulator[key].push(plant)
+        return accumulator
+      }, {})
+    : {}
 
   workbook.SheetNames.forEach((sheetName) => {
     const templateSheet = workbook.Sheets[sheetName]
@@ -220,10 +229,22 @@ export async function exportTraceabilityAuditWorkbook() {
     })[0] ?? [])
       .map((value) => value ?? '')
 
-    const cohortKey = getSheetCohortKey(sheetName)
-    const sheetPlants = cohortKey ? [...(plantsByCohortKey[cohortKey] ?? [])] : []
+    let sheetPlants = []
+
+    if (groupByCohort) {
+      const cohortKey = getSheetCohortKey(sheetName)
+      sheetPlants = cohortKey ? [...(plantsByCohortKey[cohortKey] ?? [])] : []
+    } else if (sheetName === workbook.SheetNames[0]) {
+      sheetPlants = [...exportPlants]
+    }
+
     sheetPlants.sort((left, right) => String(left.code ?? '').localeCompare(String(right.code ?? '')))
-    const nextSheet = utils.aoa_to_sheet([header, ...buildSheetRows(header, sheetPlants)])
+    const nextSheet = utils.aoa_to_sheet([
+      header,
+      ...buildSheetRows(header, sheetPlants, {
+        observationOverride,
+      }),
+    ])
 
     if (templateSheet['!cols']) {
       nextSheet['!cols'] = templateSheet['!cols']
@@ -236,6 +257,52 @@ export async function exportTraceabilityAuditWorkbook() {
     workbook.Sheets[sheetName] = nextSheet
   })
 
+  writeFile(workbook, fileName)
+}
+
+export async function exportTraceabilityAuditWorkbook() {
+  const plants = await loadTraceabilityPlants()
   const dateLabel = new Date().toISOString().slice(0, 10)
-  writeFile(workbook, `blumen-auditoria-trazabilidad-${dateLabel}.xlsx`)
+  await writeAuditWorkbook(plants, `blumen-auditoria-trazabilidad-${dateLabel}.xlsx`)
+}
+
+function getBatchExportFileName(batchCode) {
+  const normalizedCode = String(batchCode ?? 'sin-lote')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w.-]/g, '')
+
+  return `trazabilidad-${normalizedCode || 'sin-lote'}.xlsx`
+}
+
+export async function exportTraceabilityAuditWorkbookByBatch(batchId) {
+  if (!batchId) {
+    throw new Error('No se encontro el lote a exportar.')
+  }
+
+  console.log('batchId export', batchId)
+
+  const [batch, plants] = await Promise.all([
+    getPlantBatchById(batchId),
+    loadTraceabilityPlants(),
+  ])
+
+  console.log('plants total', plants.length)
+  console.log('first plant batch fields', plants[0])
+
+  const filteredPlants = plants.filter(
+    (plant) =>
+      String(plant.batchId ?? plant.batch_id ?? '') === String(batchId),
+  )
+
+  console.log('filtered plants', filteredPlants.length)
+
+  if (filteredPlants.length === 0) {
+    throw new Error('Este lote no tiene plantas asociadas para exportar.')
+  }
+
+  await writeAuditWorkbook(filteredPlants, getBatchExportFileName(batch.code), {
+    groupByCohort: false,
+    observationOverride: batch.notes ?? '',
+  })
 }

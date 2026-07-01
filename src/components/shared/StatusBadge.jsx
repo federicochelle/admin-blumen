@@ -13,7 +13,15 @@ function detectVariant(value) {
     return 'active'
   }
 
+  if (['harvested', 'cosechado'].includes(normalized)) {
+    return 'warning'
+  }
+
   if (['inactivo', 'inactive', 'cerrada', 'inactiva'].includes(normalized)) {
+    return 'inactive'
+  }
+
+  if (['closed', 'cancelled', 'cancelado', 'cancelada'].includes(normalized)) {
     return 'inactive'
   }
 

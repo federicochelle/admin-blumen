@@ -16,11 +16,12 @@ function PlantTable({ plants, selectedPlantId, onSelectPlant, filterBar = null }
       {filterBar ? <div className="border-b border-brand-light-lilac/35 pb-4">{filterBar}</div> : null}
 
       <div className={`overflow-x-auto ${filterBar ? 'mt-4' : ''}`}>
-        <div className="min-w-[780px] space-y-2">
-          <div className="grid grid-cols-[1.85fr_1fr_0.95fr_0.95fr_0.9fr] gap-3 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+        <div className="min-w-[920px] space-y-2">
+          <div className="grid grid-cols-[1.7fr_0.9fr_0.9fr_1.05fr_0.9fr_0.75fr] gap-3 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
             <span>Planta</span>
             <span>Sala</span>
             <span>Zona</span>
+            <span>Lote</span>
             <span>Etapa</span>
             <span>Edad</span>
           </div>

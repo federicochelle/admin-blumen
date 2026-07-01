@@ -196,6 +196,9 @@ function PlantQuickViewDrawer({ plant, open, onClose, onOpenPlantDetail }) {
               <h3 className="truncate text-2xl font-semibold tracking-tight text-slate-950">
                 {plant?.code ?? 'Sin codigo'}
               </h3>
+              <p className="mt-2 truncate text-sm font-semibold text-brand-deeper-purple">
+                {plant?.batchLabel ?? 'Sin lote'}
+              </p>
               <p className="mt-1 truncate text-sm text-slate-500">{plant?.strain ?? 'Sin genetica'}</p>
             </div>
 

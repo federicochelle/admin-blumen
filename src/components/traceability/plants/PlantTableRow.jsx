@@ -3,7 +3,7 @@ function PlantTableRow({ plant, selected, onSelect }) {
     <button
       type="button"
       onClick={() => onSelect(plant)}
-      className={`grid w-full grid-cols-[1.85fr_1fr_0.95fr_0.95fr_0.9fr] items-center gap-3 rounded-[1.1rem] border px-3 py-3 text-left text-sm transition ${
+      className={`grid w-full grid-cols-[1.7fr_0.9fr_0.9fr_1.05fr_0.9fr_0.75fr] items-center gap-3 rounded-[1.1rem] border px-3 py-3 text-left text-sm transition ${
         selected
           ? 'border-brand-lavender bg-brand-light-lilac/22 shadow-[0_10px_22px_rgba(91,70,111,0.12)]'
           : 'border-brand-light-lilac/35 bg-white hover:border-brand-lavender hover:bg-brand-light-lilac/12'
@@ -20,6 +20,7 @@ function PlantTableRow({ plant, selected, onSelect }) {
       </div>
       <p className="truncate text-brand-deep-purple">{plant.room}</p>
       <p className="truncate text-brand-deep-purple">{plant.bed}</p>
+      <p className="truncate text-brand-deep-purple">{plant.batchCode ?? 'Sin lote'}</p>
       <p className="truncate text-brand-deep-purple">{plant.stage}</p>
       <p className="truncate text-brand-deep-purple">{plant.ageLabel ?? '—'}</p>
     </button>

@@ -65,6 +65,14 @@ function SidebarIcon({ icon, muted = false }) {
           <path d="M12 16c0-2-1.5-4-4.5-5 0 3 1.5 5 4.5 5Z" />
         </svg>
       )
+    case 'layers':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="m12 4 8 4-8 4-8-4 8-4Z" />
+          <path d="m4 12 8 4 8-4" />
+          <path d="m4 16 8 4 8-4" />
+        </svg>
+      )
     case 'chart':
       return (
         <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">

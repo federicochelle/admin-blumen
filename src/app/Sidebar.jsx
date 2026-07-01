@@ -16,6 +16,7 @@ const sidebarGroups = [
       { label: 'Stock', active: false, icon: 'boxes' },
       { label: 'Salas', path: '/salas', icon: 'leaf' },
       { label: 'Plantas', path: '/plantas', icon: 'sprout' },
+      { label: 'Lotes', path: '/lotes', icon: 'layers' },
     ],
   },
   {

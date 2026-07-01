@@ -111,8 +111,14 @@ export async function getPlants() {
         row_index,
         column_index,
         strain_id,
+        batch_id,
         strains (
           id,
+          name
+        ),
+        plant_batches (
+          id,
+          code,
           name
         ),
         beds (
@@ -134,6 +140,7 @@ export async function getPlants() {
 
   return (data ?? []).map((plant) => {
     const strain = unwrapRelation(plant.strains)
+    const batch = unwrapRelation(plant.plant_batches)
     const bed = unwrapRelation(plant.beds)
     const room = unwrapRelation(bed?.rooms)
 
@@ -149,6 +156,9 @@ export async function getPlants() {
       column_index: plant.column_index,
       strain: strain?.name ?? null,
       strainId: plant.strain_id ?? strain?.id ?? null,
+      batchId: plant.batch_id ?? batch?.id ?? null,
+      batchCode: batch?.code ?? null,
+      batchName: batch?.name ?? null,
       bed: bed?.code ?? null,
       room: room?.name ?? null,
       bedId: bed?.id ?? null,
@@ -171,6 +181,240 @@ export async function getStrains() {
   }
 
   return data ?? []
+}
+
+function mapPlantBatch(batch, plantCountByBatchId = {}) {
+  const strain = unwrapRelation(batch?.strains)
+
+  return {
+    id: batch.id,
+    code: batch.code,
+    name: batch.name ?? null,
+    strainId: batch.strain_id ?? strain?.id ?? null,
+    strain: strain?.name ?? null,
+    startedAtRaw: batch.started_at ?? null,
+    status: batch.status ?? null,
+    notes: batch.notes ?? null,
+    createdAt: batch.created_at ?? null,
+    updatedAt: batch.updated_at ?? null,
+    plantCount: plantCountByBatchId[batch.id] ?? 0,
+  }
+}
+
+export async function getPlantBatches() {
+  ensureSupabaseEnv()
+
+  const [{ data: batches, error: batchesError }, { data: plants, error: plantsError }] = await Promise.all([
+    supabase
+      .from('plant_batches')
+      .select(
+        `
+          id,
+          code,
+          name,
+          strain_id,
+          started_at,
+          status,
+          notes,
+          created_at,
+          updated_at,
+          strains (
+            id,
+            name
+          )
+        `,
+      )
+      .order('created_at', { ascending: false }),
+    supabase.from('plants').select('batch_id'),
+  ])
+
+  if (batchesError) {
+    throw new Error(`No se pudieron cargar los lotes: ${batchesError.message}`)
+  }
+
+  if (plantsError) {
+    throw new Error(`No se pudieron cargar las plantas asociadas a los lotes: ${plantsError.message}`)
+  }
+
+  const plantCountByBatchId = (plants ?? []).reduce((accumulator, plant) => {
+    if (!plant?.batch_id) {
+      return accumulator
+    }
+
+    accumulator[plant.batch_id] = (accumulator[plant.batch_id] ?? 0) + 1
+    return accumulator
+  }, {})
+
+  return (batches ?? []).map((batch) => mapPlantBatch(batch, plantCountByBatchId))
+}
+
+export async function getPlantBatchById(id) {
+  ensureSupabaseEnv()
+
+  if (!id) {
+    throw new Error('No se encontro el lote solicitado.')
+  }
+
+  const [{ data: batch, error: batchError }, { count: plantCount, error: plantCountError }] =
+    await Promise.all([
+      supabase
+        .from('plant_batches')
+        .select(
+          `
+            id,
+            code,
+            name,
+            strain_id,
+            started_at,
+            status,
+            notes,
+            created_at,
+            updated_at,
+            strains (
+              id,
+              name
+            )
+          `,
+        )
+        .eq('id', id)
+        .maybeSingle(),
+      supabase.from('plants').select('id', { count: 'exact', head: true }).eq('batch_id', id),
+    ])
+
+  if (batchError) {
+    throw new Error(`No se pudo cargar el lote: ${batchError.message}`)
+  }
+
+  if (plantCountError) {
+    throw new Error(`No se pudo cargar la cantidad de plantas del lote: ${plantCountError.message}`)
+  }
+
+  if (!batch) {
+    throw new Error('No se encontro el lote solicitado.')
+  }
+
+  return mapPlantBatch(batch, { [id]: plantCount ?? 0 })
+}
+
+export async function createPlantBatch(payload) {
+  ensureSupabaseEnv()
+
+  if (!payload?.code?.trim()) {
+    throw new Error('El codigo del lote es obligatorio.')
+  }
+
+  if (!payload?.status?.trim()) {
+    throw new Error('El estado del lote es obligatorio.')
+  }
+
+  const batchPayload = {
+    code: payload.code.trim(),
+    name: payload.name?.trim() ? payload.name.trim() : null,
+    strain_id: payload.strain_id ?? null,
+    started_at: payload.started_at ?? null,
+    status: payload.status.trim(),
+    notes: payload.notes?.trim() ? payload.notes.trim() : null,
+  }
+
+  const { data, error } = await supabase.from('plant_batches').insert(batchPayload).select().single()
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('Ya existe un lote con ese codigo.')
+    }
+
+    throw new Error(`No se pudo crear el lote: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function updatePlantBatch(id, payload) {
+  ensureSupabaseEnv()
+
+  if (!id) {
+    throw new Error('No se encontro el lote a actualizar.')
+  }
+
+  const batchPayload = {}
+
+  if (hasOwn(payload, 'code')) {
+    if (!payload.code?.trim()) {
+      throw new Error('El codigo del lote es obligatorio.')
+    }
+
+    batchPayload.code = payload.code.trim()
+  }
+
+  if (hasOwn(payload, 'name')) {
+    batchPayload.name = payload.name?.trim() ? payload.name.trim() : null
+  }
+
+  if (hasOwn(payload, 'strain_id')) {
+    batchPayload.strain_id = payload.strain_id ?? null
+  }
+
+  if (hasOwn(payload, 'started_at')) {
+    batchPayload.started_at = payload.started_at ?? null
+  }
+
+  if (hasOwn(payload, 'status')) {
+    if (!payload.status?.trim()) {
+      throw new Error('El estado del lote es obligatorio.')
+    }
+
+    batchPayload.status = payload.status.trim()
+  }
+
+  if (hasOwn(payload, 'notes')) {
+    batchPayload.notes = payload.notes?.trim() ? payload.notes.trim() : null
+  }
+
+  if (Object.keys(batchPayload).length === 0) {
+    throw new Error('No hay cambios para actualizar en el lote.')
+  }
+
+  const { data, error } = await supabase
+    .from('plant_batches')
+    .update(batchPayload)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('Ya existe un lote con ese codigo.')
+    }
+
+    throw new Error(`No se pudo actualizar el lote: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function deletePlantBatch(id) {
+  ensureSupabaseEnv()
+
+  if (!id) {
+    throw new Error('No se encontro el lote a eliminar.')
+  }
+
+  const { error: linkedPlantsError } = await supabase
+    .from('plants')
+    .update({
+      batch_id: null,
+    })
+    .eq('batch_id', id)
+
+  if (linkedPlantsError) {
+    throw new Error(`No se pudieron desvincular las plantas del lote: ${linkedPlantsError.message}`)
+  }
+
+  const { error } = await supabase.from('plant_batches').delete().eq('id', id)
+
+  if (error) {
+    throw new Error(`No se pudo eliminar el lote: ${error.message}`)
+  }
 }
 
 export async function getPlantEvents(plantId) {
@@ -633,6 +877,7 @@ export async function createPlant(payload) {
   const plantPayload = {
     code: payload.code.trim(),
     strain_id: payload.strain_id ?? null,
+    batch_id: payload.batch_id ?? null,
     stage: payload.stage?.trim() || null,
     bed_id: payload.bed_id,
     row_index: payload.row_index,
@@ -723,6 +968,10 @@ export async function updatePlant(payload) {
     plantPayload.notes = payload.notes?.trim() ? payload.notes.trim() : null
   }
 
+  if (Object.prototype.hasOwnProperty.call(payload, 'batch_id')) {
+    plantPayload.batch_id = payload.batch_id ?? null
+  }
+
   if (Object.keys(plantPayload).length === 0) {
     throw new Error('No hay cambios para actualizar en la planta.')
   }
@@ -739,6 +988,29 @@ export async function updatePlant(payload) {
 
   if (error) {
     throw new Error(`No se pudo actualizar la planta: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function updatePlantBatchAssignment(plantId, batchId) {
+  ensureSupabaseEnv()
+
+  if (!plantId) {
+    throw new Error('No se encontro la planta a actualizar.')
+  }
+
+  const { data, error } = await supabase
+    .from('plants')
+    .update({
+      batch_id: batchId ?? null,
+    })
+    .eq('id', plantId)
+    .select('id, batch_id')
+    .single()
+
+  if (error) {
+    throw new Error(`No se pudo actualizar el lote de la planta: ${error.message}`)
   }
 
   return data
