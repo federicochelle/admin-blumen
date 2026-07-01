@@ -35,10 +35,13 @@ function PlantSlot({
   onClick,
   onEmptyClick,
   selectedEmphasis = 'default',
+  renderMetrics = null,
 }) {
+  const cellSizePx = renderMetrics?.cellSizePx ?? 44
+  const plantIconSizePx = Math.max(cellSizePx - 2, 12)
   const slotSizeStyle = {
-    width: 'var(--slot-size, 2.75rem)',
-    height: 'var(--slot-size, 2.75rem)',
+    width: `${cellSizePx}px`,
+    height: `${cellSizePx}px`,
   }
 
   if (empty) {
@@ -100,9 +103,7 @@ function PlantSlot({
       }`}
       title={plant.code ?? 'Planta'}
     >
-      <div className="scale-125">
-        <PlantIcon tone={tone} />
-      </div>
+      <PlantIcon tone={tone} sizePx={plantIconSizePx} />
     </button>
   )
 }

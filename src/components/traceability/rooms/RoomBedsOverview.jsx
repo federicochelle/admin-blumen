@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import EmptyState from '../../shared/EmptyState'
 import RoomLayoutCanvas from './RoomLayoutCanvas'
+import { getRoomRenderMetrics } from './roomRenderMetrics'
 import ZonePlantGrid from './ZonePlantGrid'
 
 function BedCard({
@@ -11,6 +12,7 @@ function BedCard({
   onEmptySlotClick,
   onEditBed,
   onDeleteBed,
+  renderMetrics,
 }) {
   const showActions = Boolean(onEditBed || onDeleteBed)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -37,7 +39,13 @@ function BedCard({
   }, [menuOpen])
 
   return (
-    <article className="group/bed relative rounded-[1.25rem] border border-slate-200/90 bg-white p-3.5 shadow-[0_10px_26px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)]">
+    <article
+      className="group/bed relative flex-none rounded-[1.25rem] border border-slate-200/90 bg-white p-3.5 shadow-[0_10px_26px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)]"
+      style={{
+        width: `${renderMetrics.zoneWidthPx}px`,
+        height: `${renderMetrics.zoneHeightPx}px`,
+      }}
+    >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -112,6 +120,7 @@ function BedCard({
         <ZonePlantGrid
           zone={bed}
           selectedPlantId={selectedPlantId}
+          renderMetrics={renderMetrics}
           onPlantClick={onPlantClick}
           onEmptySlotClick={
             onEmptySlotClick && bed.allowEmptySlotCreate !== false
@@ -145,6 +154,47 @@ function RoomBedsOverview({
   embedded = false,
 }) {
   const shouldUseLayoutCanvas = false
+  const layoutContainerRef = useRef(null)
+  const [layoutViewport, setLayoutViewport] = useState({
+    width: 0,
+    height: Math.round(window.innerHeight * 0.75),
+  })
+
+  useEffect(() => {
+    if (!layoutContainerRef.current) {
+      return undefined
+    }
+
+    const updateViewport = () => {
+      const nextWidth = layoutContainerRef.current?.clientWidth ?? 0
+      setLayoutViewport({
+        width: nextWidth,
+        height: Math.round(window.innerHeight * 0.75),
+      })
+    }
+
+    updateViewport()
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateViewport()
+    })
+
+    resizeObserver.observe(layoutContainerRef.current)
+    window.addEventListener('resize', updateViewport)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateViewport)
+    }
+  }, [])
+
+  const roomRenderMetrics = getRoomRenderMetrics({
+    beds,
+    availableWidthPx: layoutViewport.width > 0 ? layoutViewport.width - 4 : 0,
+    availableHeightPx: layoutViewport.height,
+  })
+  const bedMetricsById = roomRenderMetrics.metricsByBedId
+  const zoneGapPx = roomRenderMetrics.zoneGapPx
 
   if (beds.length === 0) {
     return (
@@ -197,24 +247,27 @@ function RoomBedsOverview({
           editable={editable}
         />
       ) : (
-        <div
-          className="grid gap-3"
-          style={{
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 18rem), 1fr))',
-          }}
-        >
-          {beds.map((bed) => (
-            <BedCard
-              key={bed.id}
-              room={room}
-              bed={bed}
-              selectedPlantId={selectedPlantId}
-              onPlantClick={onPlantClick}
-              onEmptySlotClick={onEmptySlotClick}
-              onEditBed={onEditBed}
-              onDeleteBed={onDeleteBed}
-            />
-          ))}
+        <div ref={layoutContainerRef} className="min-h-[75vh] max-h-[75vh] overflow-y-auto pr-1">
+          <div
+            className="flex flex-wrap content-start items-start justify-evenly"
+            style={{
+              gap: `${zoneGapPx}px`,
+            }}
+          >
+            {beds.map((bed) => (
+              <BedCard
+                key={bed.id}
+                room={room}
+                bed={bed}
+                renderMetrics={bedMetricsById[bed.id]}
+                selectedPlantId={selectedPlantId}
+                onPlantClick={onPlantClick}
+                onEmptySlotClick={onEmptySlotClick}
+                onEditBed={onEditBed}
+                onDeleteBed={onDeleteBed}
+              />
+            ))}
+          </div>
         </div>
       )}
     </section>

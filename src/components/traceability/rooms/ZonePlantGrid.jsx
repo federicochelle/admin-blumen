@@ -117,15 +117,12 @@ function ZonePlantGrid({
   onPlantClick,
   onEmptySlotClick,
   selectedEmphasis = 'default',
+  renderMetrics = null,
 }) {
   const { slots, columns, mode } = buildZoneSlots(zone)
   const safeColumns = Math.max(columns, 1)
-  const slotSize =
-    safeColumns <= 2
-      ? 'clamp(3.3rem, 5vw, 4.4rem)'
-      : safeColumns <= 4
-        ? 'clamp(2.8rem, 4vw, 3.8rem)'
-        : 'clamp(2.35rem, 3vw, 3.2rem)'
+  const cellSizePx = renderMetrics?.cellSizePx ?? 44
+  const cellGapPx = renderMetrics?.cellGapPx ?? 8
 
   if (mode === 'empty') {
     return (
@@ -140,8 +137,8 @@ function ZonePlantGrid({
       <div
         className="grid justify-start gap-2.5"
         style={{
-          gridTemplateColumns: `repeat(${safeColumns}, minmax(0, var(--slot-size)))`,
-          ['--slot-size']: slotSize,
+          gap: `${cellGapPx}px`,
+          gridTemplateColumns: `repeat(${safeColumns}, ${cellSizePx}px)`,
         }}
       >
         {slots.map((slot) => (
@@ -155,6 +152,7 @@ function ZonePlantGrid({
             onClick={onPlantClick}
             onEmptyClick={onEmptySlotClick}
             selectedEmphasis={selectedEmphasis}
+            renderMetrics={renderMetrics}
           />
         ))}
       </div>

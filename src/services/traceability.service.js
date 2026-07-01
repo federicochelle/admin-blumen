@@ -47,6 +47,18 @@ function normalizeOptionalLayoutCoordinate(value) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
+function sortBedsByCreation(beds = []) {
+  const hasCreatedAtForAllBeds = beds.every((bed) => bed?.created_at)
+
+  return [...beds].sort((left, right) => {
+    if (hasCreatedAtForAllBeds) {
+      return new Date(left.created_at) - new Date(right.created_at)
+    }
+
+    return Number(left?.id ?? 0) - Number(right?.id ?? 0)
+  })
+}
+
 export async function getRooms() {
   ensureSupabaseEnv()
 
@@ -85,13 +97,13 @@ export async function getBedsByRoom(roomId) {
     .from('beds')
     .select('*')
     .eq('room_id', roomId)
-    .order('code', { ascending: true })
+    .order('id', { ascending: true })
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return data ?? []
+  return sortBedsByCreation(data ?? [])
 }
 
 export async function getPlants() {

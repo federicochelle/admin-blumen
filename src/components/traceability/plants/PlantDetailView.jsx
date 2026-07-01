@@ -1,7 +1,6 @@
 import EditPlantModal from './EditPlantModal'
 import MovePlantModal from './MovePlantModal'
 import { useState } from 'react'
-import ZonePlantGrid from '../rooms/ZonePlantGrid'
 import PlantEventDetailModal from './PlantEventDetailModal'
 import PlantEventsHistory from './PlantEventsHistory'
 import PlantRecordModals from './PlantRecordModals'
@@ -60,6 +59,30 @@ function SurfaceCard({ title, subtitle = null, children }) {
   )
 }
 
+function formatPlantLocation(plant) {
+  const zoneLabel = plant?.bed ?? 'Sin zona'
+
+  if (!Number.isInteger(plant?.rowIndex) || !Number.isInteger(plant?.columnIndex)) {
+    return zoneLabel
+  }
+
+  return `${zoneLabel} · Fila ${plant.rowIndex + 1} · Columna ${plant.columnIndex + 1}`
+}
+
+function InfoItem({ label, value, tone = 'default' }) {
+  const valueClassName =
+    tone === 'accent'
+      ? 'text-base font-semibold text-brand-deeper-purple'
+      : 'text-base font-semibold text-slate-950'
+
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+      <p className={valueClassName}>{value}</p>
+    </div>
+  )
+}
+
 function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail, onDeleted }) {
   const [showEventForm, setShowEventForm] = useState(false)
   const [showIrrigationForm, setShowIrrigationForm] = useState(false)
@@ -105,7 +128,7 @@ function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail, onDeleted }) 
     <section className="space-y-5">
       <section className="rounded-[1.9rem] border border-slate-200 bg-white p-5 shadow-[0_20px_48px_rgba(15,23,42,0.08)] lg:p-6">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
                 Ficha de planta
@@ -113,11 +136,27 @@ function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail, onDeleted }) 
               <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950">
                 {plant.code}
               </h1>
-              <p className="mt-2 text-base font-semibold text-brand-deeper-purple">
-                {plant.batchLabel ?? 'Sin lote'}
-              </p>
-              <p className="mt-1 text-lg text-slate-600">{plant.strain}</p>
             </div>
+
+            <div className="space-y-3">
+              <InfoItem label="Lote" value={plant.batchLabel ?? 'Sin lote'} tone="accent" />
+              <InfoItem label="Genética" value={plant.strain ?? 'Sin genética'} />
+              <InfoItem label="Sala" value={plant.room ?? 'Sin sala'} />
+              <InfoItem label="Ubicación" value={formatPlantLocation(plant)} />
+            </div>
+
+            {plant.roomId ? (
+              <div className="border-t border-slate-200 pt-3">
+                <button
+                  type="button"
+                  onClick={() => onOpenRoomDetail?.(plant.roomId)}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition hover:text-slate-950"
+                >
+                  <span aria-hidden="true">→</span>
+                  <span>Ver sala</span>
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-4 lg:min-w-[340px]">
@@ -188,44 +227,6 @@ function PlantDetailView({ plant, onDataChanged, onOpenRoomDetail, onDeleted }) 
                 value={plant.ageLabel ?? '—'}
               />
             </div>
-
-            {plant.location ? (
-              <div className="rounded-[1.5rem] border border-slate-200 bg-[#f7f5f1] px-4 py-3">
-                <div className="mb-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-start gap-3">
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
-                      Sala
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-950">{plant.room}</p>
-                  </div>
-
-                  <div className="text-center">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      Ubicación
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-950">{plant.bed}</p>
-                  </div>
-
-                  {plant.roomId ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenRoomDetail?.(plant.roomId)}
-                      className="self-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
-                    >
-                      Ver sala
-                    </button>
-                  ) : (
-                    <div />
-                  )}
-                </div>
-
-                <ZonePlantGrid
-                  zone={plant.location}
-                  selectedPlantId={plant.id}
-                  selectedEmphasis="strong"
-                />
-              </div>
-            ) : null}
           </div>
         </div>
       </section>
