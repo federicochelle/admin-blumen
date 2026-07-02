@@ -21,6 +21,35 @@ function hasOwn(object, key) {
   return Object.prototype.hasOwnProperty.call(object ?? {}, key)
 }
 
+function normalizeComparableText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function isFloweringRoomType(value) {
+  return normalizeComparableText(value).includes('flor')
+}
+
+function isFloweringPlantEventType(value) {
+  const normalized = normalizeComparableText(value)
+  return ['floracion', 'cambio_etapa', 'inicio_floracion'].includes(normalized)
+}
+
+function isHarvestPlantEventType(value) {
+  return normalizeComparableText(value) === 'cosecha'
+}
+
+function formatWeightValue(value) {
+  if (!Number.isFinite(value)) {
+    return ''
+  }
+
+  return Number(value.toFixed(2)).toString()
+}
+
 function normalizeOptionalLayoutDimension(value) {
   if (value === undefined) {
     return undefined
@@ -1028,6 +1057,200 @@ export async function updatePlantBatchAssignment(plantId, batchId) {
   return data
 }
 
+export async function registerBatchHarvest(payload) {
+  ensureSupabaseEnv()
+
+  if (!payload?.batch_id) {
+    throw new Error('No se encontro el lote a cosechar.')
+  }
+
+  if (!payload?.event_date) {
+    throw new Error('La fecha de cosecha es obligatoria.')
+  }
+
+  const totalDryWeight = Number(payload.total_dry_weight)
+
+  if (!Number.isFinite(totalDryWeight) || totalDryWeight <= 0) {
+    throw new Error('El peso seco total debe ser un numero mayor a 0.')
+  }
+
+  const { data: batch, error: batchError } = await supabase
+    .from('plant_batches')
+    .select('id, code, status')
+    .eq('id', payload.batch_id)
+    .maybeSingle()
+
+  if (batchError) {
+    throw new Error(`No se pudo validar el lote: ${batchError.message}`)
+  }
+
+  if (!batch) {
+    throw new Error('No se encontro el lote a cosechar.')
+  }
+
+  if (normalizeComparableText(batch.status) === 'harvested') {
+    throw new Error('Este lote ya se encuentra cosechado.')
+  }
+
+  const { data: plants, error: plantsError } = await supabase
+    .from('plants')
+    .select('id, code, stage')
+    .eq('batch_id', payload.batch_id)
+    .order('id', { ascending: true })
+
+  if (plantsError) {
+    throw new Error(`No se pudieron cargar las plantas del lote: ${plantsError.message}`)
+  }
+
+  if ((plants ?? []).length === 0) {
+    throw new Error('No se puede registrar la cosecha porque el lote no tiene plantas asociadas.')
+  }
+
+  const plantIds = plants.map((plant) => plant.id)
+  const previousStagesByPlantId = Object.fromEntries(plants.map((plant) => [plant.id, plant.stage ?? null]))
+  const plantsCount = plants.length
+  const averageHarvestWeight = Number((totalDryWeight / plantsCount).toFixed(2))
+
+  const { data: plantEvents, error: plantEventsError } = await supabase
+    .from('plant_events')
+    .select('id, plant_id, event_type')
+    .in('plant_id', plantIds)
+
+  if (plantEventsError) {
+    throw new Error(`No se pudo validar el historial de cosecha del lote: ${plantEventsError.message}`)
+  }
+
+  const harvestedPlantIds = new Set(
+    (plantEvents ?? [])
+      .filter((event) => isHarvestPlantEventType(event?.event_type))
+      .map((event) => event.plant_id),
+  )
+
+  if (harvestedPlantIds.size > 0) {
+    throw new Error(
+      `No se puede registrar la cosecha del lote porque ${harvestedPlantIds.size} plantas ya tienen una cosecha registrada.`,
+    )
+  }
+
+  const observation = payload.notes?.trim()
+  const descriptionBase = `Cosecha registrada por lote. Peso promedio asignado: ${formatWeightValue(averageHarvestWeight)} g.`
+  const description = observation ? `${descriptionBase} ${observation}` : descriptionBase
+
+  let stagesUpdated = false
+  let createdEvents = []
+  let batchStatusUpdated = false
+
+  try {
+    const { error: updatePlantsError } = await supabase
+      .from('plants')
+      .update({ stage: 'COSECHADA' })
+      .in('id', plantIds)
+
+    if (updatePlantsError) {
+      throw new Error(`No se pudo actualizar la etapa de las plantas: ${updatePlantsError.message}`)
+    }
+
+    stagesUpdated = true
+
+    const eventPayloads = plantIds.map((plantId) => ({
+      plant_id: plantId,
+      event_type: 'COSECHA',
+      event_date: payload.event_date,
+      description,
+      event_data: {
+        harvest_weight: averageHarvestWeight,
+        total_dry_weight: totalDryWeight,
+        plants_count: plantsCount,
+        unit: 'g',
+        source: 'batch',
+      },
+      created_by: payload.created_by ?? 'admin',
+    }))
+
+    const { data: insertedEvents, error: insertEventsError } = await supabase
+      .from('plant_events')
+      .insert(eventPayloads)
+      .select('id')
+
+    if (insertEventsError) {
+      throw new Error(`No se pudieron registrar los eventos de cosecha: ${insertEventsError.message}`)
+    }
+
+    createdEvents = insertedEvents ?? []
+
+    const { error: updateBatchError } = await supabase
+      .from('plant_batches')
+      .update({ status: 'HARVESTED' })
+      .eq('id', payload.batch_id)
+
+    if (updateBatchError) {
+      throw new Error(`No se pudo actualizar el estado del lote: ${updateBatchError.message}`)
+    }
+
+    batchStatusUpdated = true
+  } catch (error) {
+    const rollbackIssues = []
+
+    if (batchStatusUpdated) {
+      const { error: restoreBatchError } = await supabase
+        .from('plant_batches')
+        .update({ status: batch.status ?? null })
+        .eq('id', payload.batch_id)
+
+      if (restoreBatchError) {
+        rollbackIssues.push('estado del lote')
+      }
+    }
+
+    if (createdEvents.length > 0) {
+      const createdEventIds = createdEvents.map((event) => event.id).filter(Boolean)
+
+      if (createdEventIds.length > 0) {
+        const { error: deleteEventsError } = await supabase
+          .from('plant_events')
+          .delete()
+          .in('id', createdEventIds)
+
+        if (deleteEventsError) {
+          rollbackIssues.push('eventos de cosecha')
+        }
+      }
+    }
+
+    if (stagesUpdated) {
+      const stageRestoreResults = await Promise.all(
+        plants.map((plant) =>
+          supabase
+            .from('plants')
+            .update({ stage: previousStagesByPlantId[plant.id] })
+            .eq('id', plant.id),
+        ),
+      )
+
+      if (stageRestoreResults.some((result) => result.error)) {
+        rollbackIssues.push('etapas de plantas')
+      }
+    }
+
+    if (rollbackIssues.length > 0) {
+      throw new Error(
+        `No se pudo registrar la cosecha del lote y tampoco restaurar ${rollbackIssues.join(', ')}: ${error.message}`,
+        { cause: error },
+      )
+    }
+
+    throw error
+  }
+
+  return {
+    batchId: batch.id,
+    batchCode: batch.code ?? null,
+    plantsCount,
+    totalDryWeight,
+    averageHarvestWeight,
+  }
+}
+
 export async function movePlant(payload) {
   ensureSupabaseEnv()
   console.log('movePlant received payload', payload)
@@ -1047,7 +1270,20 @@ export async function movePlant(payload) {
   console.log('ANTES', 'movePlant destinationBed lookup')
   const { data: destinationBed, error: destinationBedError } = await supabase
     .from('beds')
-    .select('id, code, row_count, column_count')
+    .select(
+      `
+        id,
+        code,
+        row_count,
+        column_count,
+        room_id,
+        rooms (
+        id,
+        name,
+        type
+      )
+    `,
+    )
     .eq('id', payload.to_bed_id)
     .maybeSingle()
   console.log(destinationBed)
@@ -1060,6 +1296,10 @@ export async function movePlant(payload) {
   if (!destinationBed) {
     throw new Error('La zona de destino no existe.')
   }
+
+  const destinationRoom = unwrapRelation(destinationBed.rooms)
+  const destinationRoomType = destinationRoom?.type ?? null
+  const shouldStartFlowering = isFloweringRoomType(destinationRoomType)
 
   const rowCount = Number(destinationBed.row_count) || 0
   const columnCount = Number(destinationBed.column_count) || 0
@@ -1104,7 +1344,7 @@ export async function movePlant(payload) {
   console.log('ANTES', 'movePlant currentPlant lookup')
   const { data: currentPlant, error: currentPlantError } = await supabase
     .from('plants')
-    .select('id, bed_id, row_index, column_index')
+    .select('id, bed_id, row_index, column_index, stage')
     .eq('id', payload.plant_id)
     .maybeSingle()
   console.log(currentPlant)
@@ -1118,10 +1358,28 @@ export async function movePlant(payload) {
     throw new Error('No se encontro la planta a mover.')
   }
 
+  let hasFloweringEvent = false
+
+  if (shouldStartFlowering) {
+    const { data: floweringEvent, error: floweringEventError } = await supabase
+      .from('plant_events')
+      .select('id, event_type')
+      .eq('plant_id', payload.plant_id)
+
+    if (floweringEventError) {
+      throw new Error(`No se pudo validar el historial de floracion: ${floweringEventError.message}`)
+    }
+
+    hasFloweringEvent = (floweringEvent ?? []).some((event) => isFloweringPlantEventType(event?.event_type))
+  }
+
+  const shouldCreateFloweringEvent = shouldStartFlowering && !hasFloweringEvent
+
   const nextPlantPayload = {
     bed_id: payload.to_bed_id,
     row_index: payload.to_row_index,
     column_index: payload.to_column_index,
+    ...(shouldCreateFloweringEvent ? { stage: 'FLORACION' } : {}),
   }
 
   const { error: moveError } = await supabase
@@ -1137,14 +1395,41 @@ export async function movePlant(payload) {
     throw new Error(`No se pudo mover la planta: ${moveError.message}`)
   }
 
+  const createdEventIds = []
+
   try {
-    await createPlantEvent({
+    const movementEvent = await createPlantEvent({
       plant_id: payload.plant_id,
       event_type: 'CAMBIO_UBICACION',
       event_date: payload.event_date ?? new Date().toISOString(),
       description: payload.description?.trim() || null,
       created_by: payload.created_by ?? 'admin',
     })
+
+    if (movementEvent?.id) {
+      createdEventIds.push(movementEvent.id)
+    }
+
+    if (shouldCreateFloweringEvent) {
+      const floweringEvent = await createPlantEvent({
+        plant_id: payload.plant_id,
+        event_type: 'FLORACION',
+        event_date: payload.event_date ?? new Date().toISOString(),
+        description:
+          payload.flowering_description?.trim() ||
+          `Inicio de floracion automatico al ingresar a la sala ${destinationRoom?.name ?? 'de floracion'}.`,
+        event_data: {
+          triggered_by: 'CAMBIO_UBICACION',
+          destination_room_id: destinationRoom?.id ?? destinationBed.room_id ?? null,
+          destination_room_type: destinationRoomType,
+        },
+        created_by: payload.created_by ?? 'admin',
+      })
+
+      if (floweringEvent?.id) {
+        createdEventIds.push(floweringEvent.id)
+      }
+    }
   } catch (error) {
     const { error: rollbackError } = await supabase
       .from('plants')
@@ -1152,12 +1437,33 @@ export async function movePlant(payload) {
         bed_id: payload.from_bed_id,
         row_index: payload.from_row_index,
         column_index: payload.from_column_index,
+        stage: currentPlant.stage ?? null,
       })
       .eq('id', payload.plant_id)
+
+    const rollbackEventIssues = []
+
+    if (createdEventIds.length > 0) {
+      const { error: deleteEventsError } = await supabase
+        .from('plant_events')
+        .delete()
+        .in('id', createdEventIds)
+
+      if (deleteEventsError) {
+        rollbackEventIssues.push('eventos')
+      }
+    }
 
     if (rollbackError) {
       throw new Error(
         `La planta se movio, pero no se pudo registrar el evento ni revertir la ubicacion: ${error.message}`,
+        { cause: error },
+      )
+    }
+
+    if (rollbackEventIssues.length > 0) {
+      throw new Error(
+        `No se pudo completar el movimiento y tampoco limpiar ${rollbackEventIssues.join(' y ')} generados: ${error.message}`,
         { cause: error },
       )
     }
@@ -1168,6 +1474,7 @@ export async function movePlant(payload) {
   return {
     id: currentPlant.id,
     ...nextPlantPayload,
+    floweringStarted: shouldCreateFloweringEvent,
   }
 }
 
@@ -1183,7 +1490,11 @@ export async function createPlantEvent(payload) {
     created_by: payload.created_by ?? 'admin',
   }
 
-  const { data, error } = await supabase.from('plant_events').insert(eventPayload)
+  const { data, error } = await supabase
+    .from('plant_events')
+    .insert(eventPayload)
+    .select()
+    .single()
 
   if (error) {
     throw new Error(`No se pudo crear el evento: ${error.message}`)

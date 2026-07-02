@@ -1,6 +1,8 @@
 import {
   getPlantEventTypeLabel,
   getPlantEventTypeTone,
+  isPlantCreationEventType,
+  isPlantDryingEventType,
   isPlantTransplantEventType,
 } from '../../../constants/plantEventTypes'
 
@@ -131,6 +133,16 @@ function EventIcon({ type }) {
     )
   }
 
+  if (isPlantDryingEventType(type)) {
+    return (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M7 14c0-3 2-5 5-5s5 2 5 5-2 5-5 5-5-2-5-5Z" />
+        <path d="M12 9V5" />
+        <path d="M12 5c1.5 0 3 .5 4 2" />
+      </svg>
+    )
+  }
+
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
       <circle cx="12" cy="12" r="7" />
@@ -162,7 +174,9 @@ function sortEventsDesc(events) {
 }
 
 function PlantQuickViewDrawer({ plant, open, onClose, onOpenPlantDetail }) {
-  const recentEvents = sortEventsDesc(plant?.events ?? []).slice(0, 4)
+  const recentEvents = sortEventsDesc(plant?.events ?? [])
+    .filter((event) => !isPlantCreationEventType(event?.event_type ?? event?.type))
+    .slice(0, 4)
 
   function handleOpenFullDetail() {
     if (!plant?.id) {

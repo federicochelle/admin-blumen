@@ -43,6 +43,11 @@ function TraceabilityBatchesView({
     onNavigateList?.()
   }
 
+  async function handleUpdated(batchId) {
+    await onRefresh?.()
+    onNavigateDetail?.(batchId)
+  }
+
   return (
     <section className="space-y-5">
       {loading ? (
@@ -56,6 +61,7 @@ function TraceabilityBatchesView({
           onBack={onNavigateList}
           onEditBatch={onNavigateEdit}
           onDeleted={handleDeleted}
+          onUpdated={handleUpdated}
         />
       ) : viewMode === 'create' ? (
         <BatchFormView mode="create" onSaved={handleSaved} onCancel={onNavigateList} />

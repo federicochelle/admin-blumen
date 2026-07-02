@@ -187,7 +187,13 @@ function MovePlantModal({ open, plant, onClose, onMoved }) {
     console.log('move payload', payload)
 
     try {
-      await movePlant(payload)
+      const result = await movePlant(payload)
+
+      window.alert(
+        result?.floweringStarted
+          ? 'Planta movida. Inicio de floración registrado.'
+          : 'Planta movida.',
+      )
 
       await onMoved?.()
       handleClose()

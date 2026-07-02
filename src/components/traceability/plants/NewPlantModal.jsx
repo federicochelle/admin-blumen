@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { PLANT_STAGES } from '../../../constants/plantStages'
 import { createPlant, getPlantBatches, getStrains } from '../../../services/traceability.service'
 
+const DEFAULT_STAGE = PLANT_STAGES[0]?.value ?? ''
+
 function InlineFormMessage({ message }) {
   if (!message) {
     return null
@@ -26,7 +28,6 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
     code: '',
     strain_id: '',
     batch_id: '',
-    stage: PLANT_STAGES[0]?.value ?? '',
     notes: '',
   })
 
@@ -36,7 +37,6 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
       code: '',
       strain_id: '',
       batch_id: '',
-      stage: PLANT_STAGES[0]?.value ?? '',
       notes: '',
     })
   }
@@ -111,7 +111,7 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
       return
     }
 
-    if (!form.stage) {
+    if (!DEFAULT_STAGE) {
       setSubmitError('La etapa es obligatoria.')
       return
     }
@@ -121,11 +121,11 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
     try {
       const createdAtIso = new Date().toISOString()
 
-      await createPlant({
+      const createdPlant = await createPlant({
         code: form.code,
         strain_id: form.strain_id ? Number(form.strain_id) : null,
         batch_id: form.batch_id || null,
-        stage: form.stage,
+        stage: DEFAULT_STAGE,
         bed_id: slot.bed.id,
         row_index: slot.rowIndex,
         column_index: slot.columnIndex,
@@ -135,7 +135,31 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
         event_description: `Se creó la planta ${form.code.trim()} en la sala ${roomName}, zona ${zoneCode}, fila ${slot.rowIndex + 1}, columna ${slot.columnIndex + 1}.`,
       })
 
-      await onCreated?.()
+      const selectedStrain = strains.find((strain) => String(strain.id) === String(form.strain_id)) ?? null
+      const selectedBatch = batches.find((batch) => String(batch.id) === String(form.batch_id)) ?? null
+
+      await onCreated?.({
+        id: createdPlant?.id ?? null,
+        code: form.code.trim(),
+        stageValue: DEFAULT_STAGE,
+        stage: DEFAULT_STAGE,
+        status: createdPlant?.status ?? null,
+        strain: selectedStrain?.name ?? null,
+        strainId: form.strain_id ? Number(form.strain_id) : null,
+        batchId: form.batch_id ? Number(form.batch_id) : null,
+        batchCode: selectedBatch?.code ?? null,
+        batchName: selectedBatch?.name ?? null,
+        notes: form.notes?.trim() ? form.notes.trim() : null,
+        bedId: slot.bed.id,
+        bed: slot.bed.code ?? slot.bed.name ?? 'Sin zona',
+        room: roomName,
+        roomId: slot.room?.id ?? slot.bed.room_id ?? null,
+        rowIndex: slot.rowIndex,
+        columnIndex: slot.columnIndex,
+        row_index: slot.rowIndex,
+        column_index: slot.columnIndex,
+        plantedAtRaw: createdPlant?.planted_at ?? createdAtIso,
+      })
       handleClose()
     } catch (error) {
       setSubmitError(error.message ?? 'No se pudo crear la planta.')
@@ -231,24 +255,6 @@ function NewPlantModal({ open, slot, onClose, onCreated }) {
                   {batches.map((batch) => (
                     <option key={batch.id} value={batch.id}>
                       {batch.name ? `${batch.code} · ${batch.name}` : batch.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-700">Etapa</span>
-                <select
-                  value={form.stage}
-                  required
-                  onChange={(formEvent) =>
-                    setForm((current) => ({ ...current, stage: formEvent.target.value }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-forest-400"
-                >
-                  {PLANT_STAGES.map((stage) => (
-                    <option key={stage.value} value={stage.value}>
-                      {stage.label}
                     </option>
                   ))}
                 </select>

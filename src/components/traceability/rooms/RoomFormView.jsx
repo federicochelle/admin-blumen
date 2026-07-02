@@ -417,8 +417,38 @@ function RoomFormView({
     setSelectedEmptySlot(null)
   }
 
-  async function handlePlantCreated() {
-    await onPlantCreated?.()
+  async function handlePlantCreated(createdPlant) {
+    if (createdPlant?.bedId && Number.isInteger(createdPlant.rowIndex) && Number.isInteger(createdPlant.columnIndex)) {
+      setZones((current) =>
+        current.map((zone) => {
+          if (String(zone.id ?? '') !== String(createdPlant.bedId)) {
+            return zone
+          }
+
+          const currentPlants = Array.isArray(zone.plants) ? zone.plants : []
+          const nextPlants = currentPlants.filter((plant) => {
+            return !(
+              Number.isInteger(plant?.rowIndex) &&
+              Number.isInteger(plant?.columnIndex) &&
+              plant.rowIndex === createdPlant.rowIndex &&
+              plant.columnIndex === createdPlant.columnIndex
+            )
+          })
+
+          nextPlants.push(createdPlant)
+
+          return {
+            ...zone,
+            plants: nextPlants,
+            plantCount: nextPlants.length,
+            maxOccupiedRow: Math.max(zone.maxOccupiedRow ?? 0, createdPlant.rowIndex + 1),
+            maxOccupiedColumn: Math.max(zone.maxOccupiedColumn ?? 0, createdPlant.columnIndex + 1),
+          }
+        }),
+      )
+    }
+
+    await onPlantCreated?.(createdPlant)
   }
 
   async function handleSubmit(event) {

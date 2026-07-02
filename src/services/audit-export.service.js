@@ -133,7 +133,7 @@ function getEventDateValue(event) {
 
 function buildRowMap(plant, options = {}) {
   const { observationOverride } = options
-  const sortedEvents = sortEventsByDate(plant.events)
+  const sortedEvents = sortEventsByDate(options.events ?? plant.events)
   const germinationEvent = findFirstEvent(sortedEvents, ['GERMINACION'])
   const firstTransplantEvent =
     findFirstEvent(sortedEvents, ['PRIMER_TRASPLANTE']) ??
@@ -164,7 +164,12 @@ function buildRowMap(plant, options = {}) {
 
 function buildSheetRows(header, plants, options = {}) {
   return plants.map((plant) => {
-    const rowMap = buildRowMap(plant, options)
+    const plantEventsByPlantId = options.plantEventsByPlantId ?? null
+    const plantEvents = plantEventsByPlantId ? plantEventsByPlantId[String(plant.id ?? '')] ?? [] : plant.events
+    const rowMap = buildRowMap(plant, {
+      ...options,
+      events: plantEvents,
+    })
     return header.map((column) => rowMap[column] ?? '')
   })
 }
@@ -180,17 +185,20 @@ async function loadTraceabilityPlants() {
   const bedsByRoom = await Promise.all(rooms.map((room) => getBedsByRoom(room.id)))
   const beds = bedsByRoom.flat()
 
-  return buildTraceabilityModel({
-    rooms,
-    beds,
-    plants,
+  return {
+    plantRows: buildTraceabilityModel({
+      rooms,
+      beds,
+      plants,
+      plantEvents,
+      irrigations,
+    }).plantRows,
     plantEvents,
-    irrigations,
-  }).plantRows
+  }
 }
 
 async function writeAuditWorkbook(plants, fileName, options = {}) {
-  const { groupByCohort = true, observationOverride } = options
+  const { groupByCohort = true, observationOverride, plantEventsByPlantId = null } = options
   const [{ read, utils, writeFile }, templateResponse, exportPlants] = await Promise.all([
     import('xlsx'),
     fetch(TEMPLATE_URL),
@@ -243,6 +251,7 @@ async function writeAuditWorkbook(plants, fileName, options = {}) {
       header,
       ...buildSheetRows(header, sheetPlants, {
         observationOverride,
+        plantEventsByPlantId,
       }),
     ])
 
@@ -261,9 +270,26 @@ async function writeAuditWorkbook(plants, fileName, options = {}) {
 }
 
 export async function exportTraceabilityAuditWorkbook() {
-  const plants = await loadTraceabilityPlants()
+  const { plantRows, plantEvents } = await loadTraceabilityPlants()
   const dateLabel = new Date().toISOString().slice(0, 10)
-  await writeAuditWorkbook(plants, `blumen-auditoria-trazabilidad-${dateLabel}.xlsx`)
+  const plantEventsByPlantId = plantEvents.reduce((accumulator, event) => {
+    const key = String(event?.plant_id ?? '')
+
+    if (!key) {
+      return accumulator
+    }
+
+    if (!accumulator[key]) {
+      accumulator[key] = []
+    }
+
+    accumulator[key].push(event)
+    return accumulator
+  }, {})
+
+  await writeAuditWorkbook(plantRows, `blumen-auditoria-trazabilidad-${dateLabel}.xlsx`, {
+    plantEventsByPlantId,
+  })
 }
 
 function getBatchExportFileName(batchCode) {
@@ -282,10 +308,12 @@ export async function exportTraceabilityAuditWorkbookByBatch(batchId) {
 
   console.log('batchId export', batchId)
 
-  const [batch, plants] = await Promise.all([
+  const [batch, traceabilityData] = await Promise.all([
     getPlantBatchById(batchId),
     loadTraceabilityPlants(),
   ])
+
+  const { plantRows: plants, plantEvents } = traceabilityData
 
   console.log('plants total', plants.length)
   console.log('first plant batch fields', plants[0])
@@ -301,8 +329,24 @@ export async function exportTraceabilityAuditWorkbookByBatch(batchId) {
     throw new Error('Este lote no tiene plantas asociadas para exportar.')
   }
 
+  const plantEventsByPlantId = plantEvents.reduce((accumulator, event) => {
+    const key = String(event?.plant_id ?? '')
+
+    if (!key) {
+      return accumulator
+    }
+
+    if (!accumulator[key]) {
+      accumulator[key] = []
+    }
+
+    accumulator[key].push(event)
+    return accumulator
+  }, {})
+
   await writeAuditWorkbook(filteredPlants, getBatchExportFileName(batch.code), {
     groupByCohort: false,
     observationOverride: batch.notes ?? '',
+    plantEventsByPlantId,
   })
 }

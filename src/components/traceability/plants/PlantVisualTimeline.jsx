@@ -1,6 +1,7 @@
 import {
   getPlantEventTypeLabel,
   getPlantEventTypeTone,
+  isPlantDryingEventType,
   matchesPlantEventMilestone,
   PLANT_EVENT_MILESTONES,
 } from '../../../constants/plantEventTypes'
@@ -45,7 +46,7 @@ function MilestoneIcon({ type, active = false }) {
     )
   }
 
-  if (type === 'cosecha') {
+  if (isPlantDryingEventType(type)) {
     return (
       <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M7 14c0-3 2-5 5-5s5 2 5 5-2 5-5 5-5-2-5-5Z" />

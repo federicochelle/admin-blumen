@@ -3,6 +3,8 @@ import EmptyState from '../../shared/EmptyState'
 import {
   getPlantEventTypeLabel,
   getPlantEventTypeTone,
+  isPlantCreationEventType,
+  isPlantDryingEventType,
   isPlantTransplantEventType,
 } from '../../../constants/plantEventTypes'
 import { deletePlantEvent } from '../../../services/traceability.service'
@@ -125,7 +127,7 @@ function EventIcon({ type }) {
     )
   }
 
-  if (type === 'COSECHA' || type === 'cosecha') {
+  if (isPlantDryingEventType(type)) {
     return (
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M7 14c0-3 2-5 5-5s5 2 5 5-2 5-5 5-5-2-5-5Z" />
@@ -166,7 +168,7 @@ function sortEventsDesc(events) {
 }
 
 function PlantEventsHistory({ events = [], onRegisterFirstEvent, onEventDeleted, onEventSelected }) {
-  const sortedEvents = sortEventsDesc(events)
+  const sortedEvents = sortEventsDesc(events).filter((event) => !isPlantCreationEventType(event?.event_type ?? event?.type))
   const [deletingEventId, setDeletingEventId] = useState(null)
   const [deleteError, setDeleteError] = useState('')
 

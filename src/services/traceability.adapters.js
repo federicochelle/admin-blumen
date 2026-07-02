@@ -1,4 +1,4 @@
-import { getPlantEventTypeLabel } from '../constants/plantEventTypes'
+import { getPlantEventTypeLabel, isBatchHarvestEvent } from '../constants/plantEventTypes'
 import { getRoomEventTypeLabel } from '../constants/roomEventTypes'
 import { getPlantStageLabel } from '../constants/plantStages'
 
@@ -81,6 +81,10 @@ function getLatestBy(items, field) {
 
 function getPlantLatestEvent(events = []) {
   return events[events.length - 1] ?? null
+}
+
+function getVisiblePlantEvents(events = []) {
+  return events.filter((event) => !isBatchHarvestEvent(event))
 }
 
 function sortByDateDesc(items, field) {
@@ -249,7 +253,8 @@ export function buildTraceabilityModel({
 
   const plantRows = plants.map((plant) => {
     const events = plantEventsByPlantId[plant.id] ?? []
-    const latestEvent = getPlantLatestEvent(events)
+    const visibleEvents = getVisiblePlantEvents(events)
+    const latestEvent = getPlantLatestEvent(visibleEvents)
     const bedIrrigations = irrigationsByBedId[plant.bedId] ?? []
     const latestIrrigation = getLatestBy(bedIrrigations, 'irrigation_date')
     const bed = plant.bedId ? bedsById[plant.bedId] : null
@@ -325,13 +330,13 @@ export function buildTraceabilityModel({
             })),
           }
         : null,
-      timeline: events.map((event) => ({
+      timeline: visibleEvents.map((event) => ({
         id: event.id,
         label: getPlantEventTypeLabel(event.event_type),
         value: formatDate(event.event_date) ?? 'Sin fecha',
         notes: event.description ?? event.notes ?? null,
       })),
-      events: events.map((event) => ({
+      events: visibleEvents.map((event) => ({
         id: event.id,
         event_type: event.event_type ?? null,
         description: event.description ?? event.notes ?? null,

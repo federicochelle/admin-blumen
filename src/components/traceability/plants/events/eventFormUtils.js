@@ -47,7 +47,7 @@ export function getEventFormKind(eventType) {
     return 'drain'
   }
 
-  if (eventType === 'COSECHA') {
+  if (eventType === 'SECADO') {
     return 'harvest'
   }
 
@@ -127,10 +127,7 @@ function buildDrainDescription(values) {
 }
 
 function buildHarvestDescription(values) {
-  const unit = values.harvest_unit?.trim() || 'g'
-  const weight = values.harvest_weight?.trim()
-  const base = weight ? `Cosecha registrada. Peso: ${weight} ${unit}` : 'Cosecha registrada'
-  return buildSentence(base, values.observation)
+  return buildSentence('Secado registrado', values.observation)
 }
 
 export function getStageUpdateForEventType(eventType) {
@@ -138,8 +135,8 @@ export function getStageUpdateForEventType(eventType) {
     return 'FLORACION'
   }
 
-  if (eventType === 'COSECHA') {
-    return 'COSECHADA'
+  if (eventType === 'SECADO') {
+    return 'SECADO'
   }
 
   if (eventType === 'DESCARTE') {
@@ -217,20 +214,11 @@ export function buildPlantEventPayload(eventType, values) {
     }
   }
 
-  if (eventType === 'COSECHA') {
-    const weight = toNullableNumber(values.harvest_weight)
-    const eventData =
-      weight === null
-        ? null
-        : {
-            harvest_weight: weight,
-            unit: values.harvest_unit?.trim() || 'g',
-          }
-
+  if (eventType === 'SECADO') {
     return {
       event_date: eventDate,
       description: buildHarvestDescription(values),
-      event_data: eventData,
+      event_data: null,
     }
   }
 

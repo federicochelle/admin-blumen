@@ -3,7 +3,7 @@ export const PLANT_EVENT_TYPES = [
   { value: 'PRIMER_TRASPLANTE', label: 'Primer trasplante', tone: 'green' },
   { value: 'SEGUNDO_TRASPLANTE', label: 'Segundo trasplante', tone: 'green' },
   { value: 'FLORACION', label: 'Floración', tone: 'violet' },
-  { value: 'COSECHA', label: 'Cosecha', tone: 'orange' },
+  { value: 'SECADO', label: 'Secado', tone: 'orange' },
   { value: 'CAMBIO_UBICACION', label: 'Cambio de ubicación', tone: 'blue' },
   { value: 'CONTROL_SANITARIO', label: 'Control sanitario', tone: 'blue' },
   { value: 'TRATAMIENTO', label: 'Tratamiento', tone: 'red' },
@@ -46,9 +46,9 @@ export const PLANT_EVENT_MILESTONES = [
     aliases: ['FLORACION', 'floracion', 'CAMBIO_ETAPA', 'cambio_etapa', 'inicio_floracion'],
   },
   {
-    key: 'COSECHA',
-    label: 'Cosecha',
-    aliases: ['COSECHA', 'cosecha'],
+    key: 'SECADO',
+    label: 'Secado',
+    aliases: ['SECADO', 'secado', 'COSECHA', 'cosecha'],
   },
 ]
 
@@ -79,7 +79,8 @@ const LEGACY_EVENT_ALIASES = {
   cambio_ubicacion: { label: 'Cambio de ubicación', tone: 'blue' },
   cambio_zona: { label: 'Cambio de ubicación', tone: 'blue' },
   observacion: { label: 'Observación', tone: 'yellow' },
-  cosecha: { label: 'Cosecha', tone: 'orange' },
+  secado: { label: 'Secado', tone: 'orange' },
+  cosecha: { label: 'Secado', tone: 'orange' },
   descarte: { label: 'Descarte', tone: 'red' },
 }
 
@@ -138,6 +139,20 @@ export function getPlantEventTypeLabel(value) {
 export function getPlantEventTypeTone(value) {
   const resolved = resolvePlantEventType(value)
   return resolved?.tone ?? 'neutral'
+}
+
+export function isPlantCreationEventType(value) {
+  return ['creacion', 'alta'].includes(normalizeEventTypeAlias(value))
+}
+
+export function isPlantDryingEventType(value) {
+  return ['secado', 'cosecha'].includes(normalizeEventTypeAlias(value))
+}
+
+export function isBatchHarvestEvent(event) {
+  const normalizedType = normalizeEventTypeAlias(event?.event_type ?? event?.type)
+  const eventData = event?.event_data ?? event?.eventData ?? null
+  return normalizedType === 'cosecha' && eventData?.source === 'batch'
 }
 
 export function isPlantTransplantEventType(value) {

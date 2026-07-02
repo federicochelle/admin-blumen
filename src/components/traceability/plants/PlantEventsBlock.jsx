@@ -1,7 +1,10 @@
 import EmptyState from '../../shared/EmptyState'
+import { isPlantCreationEventType } from '../../../constants/plantEventTypes'
 
 function PlantEventsBlock({ events }) {
-  if (events.length === 0) {
+  const visibleEvents = events.filter((event) => !isPlantCreationEventType(event?.event_type ?? event?.type))
+
+  if (visibleEvents.length === 0) {
     return (
       <EmptyState
         compact
@@ -13,7 +16,7 @@ function PlantEventsBlock({ events }) {
 
   return (
     <div className="space-y-3">
-      {events.map((event) => (
+      {visibleEvents.map((event) => (
         <article key={event.id} className="rounded-[1.35rem] border border-slate-200 bg-white p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
