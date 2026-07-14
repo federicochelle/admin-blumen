@@ -3,11 +3,13 @@ import EmptyState from '../../shared/EmptyState'
 import RoomLayoutCanvas from './RoomLayoutCanvas'
 import { getRoomRenderMetrics } from './roomRenderMetrics'
 import ZonePlantGrid from './ZonePlantGrid'
+import MultiPlantEventModal from './MultiPlantEventModal'
 
 function BedCard({
   room,
   bed,
   selectedPlantId,
+  selectedPlantIds,
   onPlantClick,
   onEmptySlotClick,
   onEditBed,
@@ -120,6 +122,7 @@ function BedCard({
         <ZonePlantGrid
           zone={bed}
           selectedPlantId={selectedPlantId}
+          selectedPlantIds={selectedPlantIds}
           renderMetrics={renderMetrics}
           onPlantClick={onPlantClick}
           onEmptySlotClick={
@@ -152,6 +155,7 @@ function RoomBedsOverview({
   onBedLayoutCommit = null,
   editable = false,
   embedded = false,
+  onDataChanged = null,
 }) {
   const shouldUseLayoutCanvas = false
   const layoutContainerRef = useRef(null)
@@ -159,6 +163,10 @@ function RoomBedsOverview({
     width: 0,
     height: Math.round(window.innerHeight * 0.75),
   })
+
+  const [multiSelectEnabled, setMultiSelectEnabled] = useState(false)
+  const [localSelectedPlantIds, setLocalSelectedPlantIds] = useState([])
+  const [showMultiEventModal, setShowMultiEventModal] = useState(false)
 
   useEffect(() => {
     if (!layoutContainerRef.current) {
@@ -226,11 +234,39 @@ function RoomBedsOverview({
               <h4 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">{title}</h4>
             ) : null}
           </div>
-          {showCount ? (
-            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
-              {beds.length} zonas
-            </span>
-          ) : null}
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={multiSelectEnabled}
+                onChange={(e) => {
+                  setMultiSelectEnabled(e.target.checked)
+                  if (!e.target.checked) {
+                    setLocalSelectedPlantIds([])
+                  }
+                }}
+              />
+              <span className="select-none">Selección múltiple</span>
+            </label>
+            {multiSelectEnabled ? (
+              <div>
+                <button
+                  type="button"
+                  disabled={localSelectedPlantIds.length === 0}
+                  onClick={() => setShowMultiEventModal(true)}
+                  className="ml-2 rounded-xl bg-brand-turquoise px-3.5 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  Agregar evento a seleccionadas
+                </button>
+              </div>
+            ) : null}
+            {showCount ? (
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+                {beds.length} zonas
+              </span>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -248,6 +284,17 @@ function RoomBedsOverview({
         />
       ) : (
         <div ref={layoutContainerRef} className="min-h-[75vh] max-h-[75vh] overflow-y-auto pr-1">
+          <MultiPlantEventModal
+            open={showMultiEventModal}
+            plantIds={localSelectedPlantIds}
+            onClose={() => setShowMultiEventModal(false)}
+            onCreated={() => {
+              setShowMultiEventModal(false)
+              setLocalSelectedPlantIds([])
+              // request parent to refresh data so plant drawers show new events
+              onDataChanged?.(room?.id)
+            }}
+          />
           <div
             className="flex flex-wrap content-start items-start justify-evenly"
             style={{
@@ -260,8 +307,13 @@ function RoomBedsOverview({
                 room={room}
                 bed={bed}
                 renderMetrics={bedMetricsById[bed.id]}
-                selectedPlantId={selectedPlantId}
-                onPlantClick={onPlantClick}
+                selectedPlantId={multiSelectEnabled ? null : selectedPlantId}
+                selectedPlantIds={multiSelectEnabled ? localSelectedPlantIds : null}
+                onPlantClick={multiSelectEnabled ? (plant) => {
+                  setLocalSelectedPlantIds((prev) =>
+                    prev.includes(plant.id) ? prev.filter((id) => id !== plant.id) : [...prev, plant.id]
+                  )
+                } : onPlantClick}
                 onEmptySlotClick={onEmptySlotClick}
                 onEditBed={onEditBed}
                 onDeleteBed={onDeleteBed}

@@ -289,9 +289,10 @@ function RoomDetailView({ room, beds, plants, onDataChanged, onOpenPlantDetail, 
             selectedPlantId={selectedPlantData?.id ?? null}
             onPlantClick={handlePlantClick}
             onEmptySlotClick={handleEmptySlotClick}
+            onDataChanged={onDataChanged}
             useLayoutCanvas={false}
             editable={false}
-            showCount={false}
+            showCount={true}
             embedded
           />
         </section>

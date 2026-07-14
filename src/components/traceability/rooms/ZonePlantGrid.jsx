@@ -113,6 +113,7 @@ function buildZoneSlots(zone) {
 function ZonePlantGrid({
   zone,
   selectedPlantId = null,
+  selectedPlantIds = null,
   selectedSlotId = null,
   onPlantClick,
   onEmptySlotClick,
@@ -141,20 +142,27 @@ function ZonePlantGrid({
           gridTemplateColumns: `repeat(${safeColumns}, ${cellSizePx}px)`,
         }}
       >
-        {slots.map((slot) => (
-          <PlantSlot
-            key={slot.id}
-            slot={slot}
-            plant={slot.plant}
-            empty={!slot.plant}
-            selected={slot.plant?.id === selectedPlantId}
-            selectedEmpty={slot.id === selectedSlotId}
-            onClick={onPlantClick}
-            onEmptyClick={onEmptySlotClick}
-            selectedEmphasis={selectedEmphasis}
-            renderMetrics={renderMetrics}
-          />
-        ))}
+        {slots.map((slot) => {
+          const plantId = slot.plant?.id ?? null
+          const isSelected = Array.isArray(selectedPlantIds)
+            ? (plantId !== null && selectedPlantIds.includes(plantId))
+            : plantId === selectedPlantId
+
+          return (
+            <PlantSlot
+              key={slot.id}
+              slot={slot}
+              plant={slot.plant}
+              empty={!slot.plant}
+              selected={isSelected}
+              selectedEmpty={slot.id === selectedSlotId}
+              onClick={onPlantClick}
+              onEmptyClick={onEmptySlotClick}
+              selectedEmphasis={selectedEmphasis}
+              renderMetrics={renderMetrics}
+            />
+          )
+        })}
       </div>
     </div>
   )
